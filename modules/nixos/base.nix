@@ -17,13 +17,16 @@
         "sublimetext4"
         "vscode"
       ];
-    permittedInsecurePackages = [ "openssl-1.1.1w" ];
+    permittedInsecurePackages = [
+      "openssl-1.1.1w" # pulled in via sublime 4
+    ];
   };
 
   # basic hardware support
   imports = [ "${modulesPath}/profiles/all-hardware.nix" ];
-  hardware.cpu.amd.updateMicrocode = true;
-  hardware.cpu.intel.updateMicrocode = true;
+
+  hardware.cpu.amd.updateMicrocode = pkgs.system == "x86_64-linux";
+  hardware.cpu.intel.updateMicrocode = pkgs.system == "x86_64-linux";
   # services.xserver.videoDrivers = [
   #   "intel"
   #   "amdgpu"
