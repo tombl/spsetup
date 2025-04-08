@@ -19,7 +19,10 @@
   };
 
   # basic hardware support
-  imports = [ "${modulesPath}/profiles/all-hardware.nix" ];
+  imports = [
+    "${modulesPath}/profiles/all-hardware.nix"
+    ./distrobox.nix
+  ];
   hardware.cpu.amd.updateMicrocode = true;
   hardware.cpu.intel.updateMicrocode = true;
   # services.xserver.videoDrivers = [
@@ -165,24 +168,7 @@
     sysstat
     zip
     htop
-    btop
     wget
-
-    neovim
-    vim
-    emacs
-    sublime4
-    vscode
-    gedit
-    geany
-
-    python311Full # includes idle
-    zulu17
-    pypy3
-
-    # this order means `cc` is gcc
-    gcc12
-    clang
   ];
 
   services.nixseparatedebuginfod.enable = true;
