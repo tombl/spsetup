@@ -80,7 +80,7 @@ let
 
       chroot out /bin/apt install -y ${lib.concatStringsSep " " aptPackages}
 
-      rm -r out/var/cache/*
+      rm -r out/var/cache/* out/etc/{passwd,shadow,group}
       cp -r out/* $out
     ''
   );
@@ -90,7 +90,7 @@ let
     runtimeInputs = [ pkgs.bubblewrap ];
     text = ''
       bwrap \
-        --overlay-src ${rootfs} --tmp-overlay / \
+        --bind ${rootfs} / \
         --overlay-src /etc --overlay-src ${rootfs}/etc --tmp-overlay /etc \
         --setenv PATH /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
         --proc /proc \
