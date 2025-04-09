@@ -4,7 +4,8 @@ let
   inherit (pkgs) lib;
 
   packages = [
-    "gcc"
+    "hello"
+    # "gcc"
     # "openjdk-17-jdk"
     # "openjdk-17-jre"
     # "python3"
@@ -18,7 +19,8 @@ let
     "main"
     # "universe"
   ];
-  debsHash = "sha256-qbHqFe9pYebz86wJJjsM+p+5SInN1j3l2C/g1MxHHF4=";
+  # debsHash = "sha256-qbHqFe9pYebz86wJJjsM+p+5SInN1j3l2C/g1MxHHF4="; # just gcc
+  debsHash = "sha256-KfVjdFlQwtOnce2W4PSiaG0MpAoPqY84opOGEWJtwXM="; # just hello
 
   debootstrap = pkgs.debootstrap.overrideAttrs {
     postInstall = ''
@@ -63,9 +65,33 @@ let
         "$@"
     '';
   };
+
+  ldso-source = ''
+    #include <unistd.h>
+    #include <errno.h>
+    int main(int argc, char *argv[], char *envp[]) {
+      execve("${lib.getExe run}", argv, envp);
+      return errno;
+    }
+  '';
+
+  ldso32 = pkgs.pkgsi686LinuxStatic.runCommandCC "ldso32" {
+    source = ldso-source;
+    passAsFile = [ "source" ];
+  } "$CC -Os $source -o $out";
+
+  ldso64 = pkgs.pkgsStatic.runCommandCC "ldso64" {
+    source = ldso-source;
+    passAsFile = [ "source" ];
+  } "$CC -Os $source -o $out";
 in
+
 run
 // {
-  inherit rootfs;
-  inherit debs;
+  inherit
+    rootfs
+    debs
+    ldso32
+    ldso64
+    ;
 }
