@@ -3,18 +3,21 @@
 let
   inherit (pkgs) lib;
 
-  release = "noble";
-  # mirror = "http://archive.ubuntu.com/ubuntu/";
+  release = "noble"; # 24.04
   mirror = "http://au.archive.ubuntu.com/ubuntu/";
   debsHash = "sha256-sD5Ckx6O8kaRM+edWRY673sW7A8LXGYjmDbfF0yzR7Y=";
 
   aptPackages = [
+    "build-essential"
     "gcc"
+    "g++"
     "python3"
+    "openjdk-17-jdk"
+    "openjdk-17-jre"
     "pypy3"
   ];
   aptExtraRepos = [ "universe" ];
-  aptHash = "sha256-D9LzGuf+NguWUd3cmkVKcDLNkG/MATIGQkqC3Gkf/UY=";
+  aptHash = "sha256-wqLXdz0xigA1nMu0S3e6M4dYkqUxLI8EZs6auh3Z1Ks=";
 
   debootstrap = pkgs.debootstrap.overrideAttrs {
     postInstall = ''
@@ -40,7 +43,7 @@ let
       }
       ''
         debootstrap --unpack-tarball=${basedebs} ${debootstrap-args}
-        rm -r $out out/dev/*
+        rm -r $out out/dev/* # can't copy special devices
         rm out/var/log/bootstrap.log # has references to the debootstrap store path
         tar cf $out -C out .
       ''
@@ -74,15 +77,24 @@ let
       '';
 
   rootfs = pkgs.vmTools.runInLinuxVM (
-    pkgs.runCommand "ubuntu-rootfs" { memSize = 2048; } ''
-      mkdir out
-      tar xf ${apt-cache} -C out
+    pkgs.runCommand "ubuntu-rootfs"
+      {
+        memSize = 4 * 1024;
+        nativeBuildInputs = [ pkgs.util-linux ];
+      }
+      ''
+        mkdir out
+        tar xf ${apt-cache} -C out
 
-      chroot out /bin/apt install -y ${lib.concatStringsSep " " aptPackages}
+        mount --bind /proc out/proc
+        mount --bind /dev out/dev
 
-      rm -r out/var/cache/* out/etc/{passwd,shadow,group}
-      cp -r out/* $out
-    ''
+        chroot out /bin/apt install -y ${lib.concatStringsSep " " aptPackages}
+
+        umount out/proc out/dev
+        rm -r out/var/cache/* out/etc/{passwd,shadow,group}
+        cp -r out/* $out
+      ''
   );
 
   run = pkgs.writeShellApplication {
@@ -100,24 +112,34 @@ let
     '';
   };
 
-  ldso-source = ''
+  ldso = pkgs.pkgsStatic.runCommandCC "ubuntu-ldso" { } ''
+    cat >ldso.c <<EOF
     #include <unistd.h>
     #include <errno.h>
     int main(int argc, char *argv[], char *envp[]) {
-      execve("${lib.getExe run}", argv, envp);
+      char **args = malloc(sizeof(char*) * (argc + 2));
+      if (!args) return 12;
+
+      /* duplicate the first arg, shift the rest back */
+      args[0] = argv[0];
+      args[1] = argv[0];
+      for (int i = 0; i < argc; i++) {
+        args[i+1] = argv[i];
+      }
+      args[argc+1] = NULL;
+
+      execve("${lib.getExe run}", args, envp);
       return errno;
     }
+    EOF
+    $CC -Os ldso.c -o $out
   '';
 
-  ldso32 = pkgs.pkgsi686LinuxStatic.runCommandCC "ldso32" {
-    source = ldso-source;
-    passAsFile = [ "source" ];
-  } "$CC -Os $source -o $out";
-
-  ldso64 = pkgs.pkgsStatic.runCommandCC "ldso64" {
-    source = ldso-source;
-    passAsFile = [ "source" ];
-  } "$CC -Os $source -o $out";
+  provide =
+    program:
+    pkgs.writeShellScriptBin program ''
+      exec ${lib.getExe run} ${program} "$@"
+    '';
 in
 
 run
@@ -126,7 +148,7 @@ run
     rootfs
     basedebs
     apt-cache
-    ldso32
-    ldso64
+    ldso
+    provide
     ;
 }
