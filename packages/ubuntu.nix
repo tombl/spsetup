@@ -3,24 +3,18 @@
 let
   inherit (pkgs) lib;
 
-  packages = [
-    "hello"
-    # "gcc"
-    # "openjdk-17-jdk"
-    # "openjdk-17-jre"
-    # "python3"
-    # "pypy3"
-  ];
   release = "noble";
   # mirror = "http://archive.ubuntu.com/ubuntu/";
   mirror = "http://au.archive.ubuntu.com/ubuntu/";
-  variant = "buildd";
-  repos = [
-    "main"
-    # "universe"
+  debsHash = "sha256-sD5Ckx6O8kaRM+edWRY673sW7A8LXGYjmDbfF0yzR7Y=";
+
+  aptPackages = [
+    "gcc"
+    "python3"
+    "pypy3"
   ];
-  # debsHash = "sha256-qbHqFe9pYebz86wJJjsM+p+5SInN1j3l2C/g1MxHHF4="; # just gcc
-  debsHash = "sha256-KfVjdFlQwtOnce2W4PSiaG0MpAoPqY84opOGEWJtwXM="; # just hello
+  aptExtraRepos = [ "universe" ];
+  aptHash = "sha256-D9LzGuf+NguWUd3cmkVKcDLNkG/MATIGQkqC3Gkf/UY=";
 
   debootstrap = pkgs.debootstrap.overrideAttrs {
     postInstall = ''
@@ -29,24 +23,64 @@ let
     '';
   };
 
-  debs =
-    pkgs.runCommand "ubuntu-packages.tar"
+  debootstrap-args = "--variant=minbase ${release} out ${mirror}";
+
+  basedebs = pkgs.runCommand "ubuntu-packages.tar" {
+    nativeBuildInputs = [ debootstrap ];
+    outputHashMode = "flat";
+    outputHashAlgo = "sha256";
+    outputHash = debsHash;
+  } "debootstrap --make-tarball=$out ${debootstrap-args}";
+
+  baserootfs = pkgs.vmTools.runInLinuxVM (
+    pkgs.runCommand "ubuntu-rootfs.tar"
       {
         nativeBuildInputs = [ debootstrap ];
+        disallowedReferences = [ debootstrap ]; # don't allow references to debootstrap in the output
+      }
+      ''
+        debootstrap --unpack-tarball=${basedebs} ${debootstrap-args}
+        rm -r $out out/dev/*
+        rm out/var/log/bootstrap.log # has references to the debootstrap store path
+        tar cf $out -C out .
+      ''
+  );
+
+  apt-cache =
+    pkgs.runCommand "ubuntu-apt-cache.tar"
+      {
+        nativeBuildInputs = [ pkgs.bubblewrap ];
         outputHashMode = "flat";
         outputHashAlgo = "sha256";
-        outputHash = debsHash;
+        outputHash = aptHash;
       }
-      "debootstrap --make-tarball=$out --components=${lib.concatStringsSep "," repos} --include=${lib.concatStringsSep "," packages} --variant=${variant} ${release} tmp ${mirror}";
+      ''
+        mkdir out
+        tar xf ${baserootfs} -C out
+
+        bwrap \
+          --bind out / \
+          --bind /etc/resolv.conf /etc/resolv.conf \
+          --setenv PATH /bin \
+          bash -c '
+            for repo in ${lib.concatStringsSep " " aptExtraRepos}; do
+              echo "deb ${mirror} ${release} $repo" >> /etc/apt/sources.list
+            done
+            apt-get update
+            apt-get install --download-only -y ${lib.concatStringsSep " " aptPackages}
+          '
+
+        tar cf $out -C out .
+      '';
 
   rootfs = pkgs.vmTools.runInLinuxVM (
-    pkgs.runCommand "ubuntu-rootfs" { nativeBuildInputs = [ debootstrap ]; } ''
-      debootstrap --unpack-tarball=${debs} --components=${lib.concatStringsSep "," repos} --include=${lib.concatStringsSep "," packages} --variant=${variant} ${release} out ${mirror}
+    pkgs.runCommand "ubuntu-rootfs" { memSize = 2048; } ''
+      mkdir out
+      tar xf ${apt-cache} -C out
 
-      rm -r out/dev/* # we can't copy the special files
+      chroot out /bin/apt install -y ${lib.concatStringsSep " " aptPackages}
 
-      rm out/etc/{passwd,shadow,group} # we're going to provide our own users
-
+      rm -r out/var/cache/*
       cp -r out/* $out
     ''
   );
@@ -56,8 +90,8 @@ let
     runtimeInputs = [ pkgs.bubblewrap ];
     text = ''
       bwrap \
-        --bind ${rootfs} / \
-        --overlay-src /etc --overlay-src ${rootfs}/etc --ro-overlay /etc \
+        --overlay-src ${rootfs} --tmp-overlay / \
+        --overlay-src /etc --overlay-src ${rootfs}/etc --tmp-overlay /etc \
         --setenv PATH /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
         --proc /proc \
         --dev /dev \
@@ -90,7 +124,8 @@ run
 // {
   inherit
     rootfs
-    debs
+    basedebs
+    apt-cache
     ldso32
     ldso64
     ;
