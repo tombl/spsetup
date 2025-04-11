@@ -14,6 +14,8 @@
     timeoutStyle = "countdown"; # hide the boot menu unless you press shift
   };
 
+  boot.plymouth.enable = true;
+
   disko.devices = {
     disk = {
       main = {
