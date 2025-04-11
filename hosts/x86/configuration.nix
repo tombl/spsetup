@@ -7,6 +7,13 @@
   ];
   nixpkgs.hostPlatform = "x86_64-linux";
 
+  boot.loader.timeout = 1;
+  boot.loader.grub = {
+    efiSupport = true;
+    efiInstallAsRemovable = true;
+    timeoutStyle = "countdown"; # hide the boot menu unless you press shift
+  };
+
   disko.devices = {
     disk = {
       main = {
