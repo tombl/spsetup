@@ -136,9 +136,9 @@ let
   '';
 
   provide =
-    program:
-    pkgs.writeShellScriptBin program ''
-      exec ${lib.getExe run} ${program} "$@"
+    outer: inner:
+    pkgs.writeShellScriptBin outer ''
+      exec ${lib.getExe run} ${inner} "$@"
     '';
 in
 

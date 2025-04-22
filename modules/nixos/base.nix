@@ -169,14 +169,14 @@
       wget
 
       ubuntu
-      (ubuntu.provide "gcc")
-      (ubuntu.provide "g++")
-      (ubuntu.provide "cc")
-      (ubuntu.provide "c++")
-      (ubuntu.provide "javac")
-      (ubuntu.provide "java")
-      (ubuntu.provide "python3")
-      (ubuntu.provide "pypy3")
+      (ubuntu.provide "gcc" "gcc-12")
+      (ubuntu.provide "cc" "gcc-12")
+      (ubuntu.provide "g++" "g++-12")
+      (ubuntu.provide "c++" "g++-12")
+      (ubuntu.provide "javac" "javac")
+      (ubuntu.provide "java" "java")
+      (ubuntu.provide "python3" "python3")
+      (ubuntu.provide "pypy3" "pypy3")
 
       neovim
       vim
