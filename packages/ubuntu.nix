@@ -27,20 +27,22 @@ let
 
   mkRun =
     name: rootfs:
-    lib.getExe (pkgs.writeShellApplication {
-      name = "${name}-run";
-      runtimeInputs = [ pkgs.bubblewrap ];
-      text = ''
-        bwrap \
-          --bind ${rootfs} / \
-          --overlay-src /etc --overlay-src ${rootfs}/etc --tmp-overlay /etc \
-          --setenv PATH /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-          --proc /proc \
-          --dev /dev \
-          --bind /home /home \
-          "$@"
-      '';
-    });
+    lib.getExe (
+      pkgs.writeShellApplication {
+        name = "${name}-run";
+        runtimeInputs = [ pkgs.bubblewrap ];
+        text = ''
+          bwrap \
+            --bind ${rootfs} / \
+            --overlay-src /etc --overlay-src ${rootfs}/etc --tmp-overlay /etc \
+            --setenv PATH /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+            --proc /proc \
+            --dev /dev \
+            --bind /home /home \
+            "$@"
+        '';
+      }
+    );
 
   mkLdso =
     name: run:
@@ -48,9 +50,10 @@ let
       cat >ldso.c <<EOF
       #include <unistd.h>
       #include <errno.h>
+      #include <stdlib.h>
       int main(int argc, char *argv[], char *envp[]) {
-        char **args = malloc(sizeof(char*) * (argc + 2));
-        if (!args) return 12;
+        char **args = calloc(argc + 2, sizeof(char*));
+        if (!args) return ENOMEM;
 
         /* duplicate the first arg, shift the rest back */
         args[0] = argv[0];
