@@ -158,6 +158,7 @@
     man-pages
     p7zip
     sysstat
+    unzip
     zip
     htop
     btop
